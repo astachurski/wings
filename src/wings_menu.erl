@@ -1835,7 +1835,7 @@ wx_popup_menu(X0,Y0,Names,Menus0,Magnet,Owner) ->
     Parent = get(top_frame),
     Pos = wxWindow:clientToScreen(get(gl_canvas), X0-10,Y0-10),
     HotKeys = wings_hotkey:matching(Names),
-    true = is_list(Menus0),
+    is_list(Menus0) orelse erlang:error(Menus0),
     Menus1  = wings_plugin:menu(list_to_tuple(reverse(Names)), Menus0),
     Entries0 = [normalize_menu_wx(Entry, HotKeys, Names) || Entry <- lists:flatten(Menus1)],
     CreateMenu = fun() -> setup_dialog(Parent,Entries0, Magnet, Pos) end,
@@ -1916,6 +1916,9 @@ popup_result(#menu_pop{type=menu,name=Name,opts=Opts}, {Click,MagnetClick}, Name
     case {have_option_box(Opts), Name} of
 	{true,_} ->
 	    wings_wm:psend(Owner, {activate, build_command({Name,Click=/=left_up}, Names)});
+	{false, {'VALUE', Cmd}} ->
+	    Magnet = is_magnet_active(Opts, MagnetClick),
+	    wings_wm:psend(Owner, {activate, build_command(Cmd, Names, Magnet)});
 	{false, {_Name, Cmd}} when is_tuple(Cmd) ->
 	    Magnet = is_magnet_active(Opts, MagnetClick),
 	    wings_wm:psend(Owner, {activate, insert_magnet_flags(Cmd, Magnet)});
@@ -2048,7 +2051,7 @@ setup_colors(Window, Background, Foreground) ->
 	    setup_colors(wx:typeCast(wxWindow:getParent(Window), wxPanel), Background, Foreground)
     end.
 
-tooltip("", false, false) -> "";
+tooltip("", false, false) -> {"",""};
 tooltip(Help, OptBox, Magnet) when is_list(Help) ->
     tooltip(Help, "", opt_help(OptBox), Magnet);
 tooltip({Help}, OptBox, Magnet) ->
@@ -2167,13 +2170,16 @@ normalize_menu_wx({S,Fun,Help,Ps}, Hotkeys, Ns) when is_function(Fun) ->
     HK = match_hotkey(Name, Hotkeys, have_option_box(Ps)),
     %% io:format("Norm: ~p~n",[Name]),
     {S,Fun,Help,Ps,HK};
-normalize_menu_wx({S, {Name, SubMenu}}, Hotkeys, Ns) ->
+normalize_menu_wx({S, {Name, SubMenu}}, Hotkeys, Ns)
+  when is_list(SubMenu); is_function(SubMenu) ->
     HK = match_hotkey(Name, Hotkeys, false),
     {submenu, S, {Name, SubMenu}, submenu_help("", SubMenu, [Name|Ns]), [], HK};
-normalize_menu_wx({S, {Name, SubMenu}, Ps}, Hotkeys, Ns) ->
+normalize_menu_wx({S, {Name, SubMenu}, Ps}, Hotkeys, Ns)
+  when is_list(SubMenu); is_function(SubMenu) ->
     HK = match_hotkey(Name, Hotkeys, false),
     {submenu, S, {Name, SubMenu}, submenu_help("", SubMenu, [Name|Ns]), Ps, HK};
-normalize_menu_wx({S,{Name,Fun},Help,Ps}, Hotkeys, Ns) when is_function(Fun) ->
+normalize_menu_wx({S,{Name,Fun},Help,Ps}, Hotkeys, Ns)
+  when is_function(Fun) ->
     HK = match_hotkey(Name, Hotkeys, have_option_box(Ps)),
     {submenu, S, {Name, Fun}, submenu_help(Help, Fun, [Name|Ns]), Ps, HK};
 normalize_menu_wx({S,Name,Help,Ps}, Hotkeys, _Ns) ->
