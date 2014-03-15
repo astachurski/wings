@@ -53,6 +53,10 @@
 	 orig_xy				%Originally input global X and Y
 	}).
 
+-define(REPEAT, 99).
+-define(REPEAT_ARGS, 98).
+-define(REPEAT_DRAG, 97).
+
 -record(menu_entry, {wxid, name, object, type}).
 
 -record(menu_pop,
@@ -2130,6 +2134,11 @@ check_item(Name) ->
 	    wxMenuItem:check(MenuItem, [{check, not Checked}])
     end.
 
+repeat_cmd(Type, Cmd)  ->
+    Id = predefined_item(edit, Type),
+    [#menu_entry{object=MI}] = ets:lookup(wings_menus, Id),
+    wxMenuItem:setText(MI, Cmd).
+
 wx_menubar(Menus) ->
     ets:new(wings_menus, [named_table, {keypos,2}]),
     WinName = {menubar, geom},
@@ -2262,6 +2271,10 @@ predefined_item(file, save_as) -> ?wxID_SAVEAS;
 predefined_item(file, revert)  -> ?wxID_REVERT;
 predefined_item(edit, undo)    -> ?wxID_UNDO;
 predefined_item(edit, redo)    -> ?wxID_REDO;
+%% Make it easy to find repeat
+predefined_item(edit, repeat)  -> ?REPEAT;
+predefined_item(edit, repeat_args) -> ?REPEAT_ARGS;
+predefined_item(edit, repeat_drag) -> ?REPEAT_DRAG;
 predefined_item(_, _) ->  false.
 
 colorB({R,G,B,A}) -> {trunc(R*255),trunc(G*255),trunc(B*255),trunc(A*255)};
