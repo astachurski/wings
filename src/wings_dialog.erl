@@ -369,15 +369,15 @@ build(Ask, {text, Def, Flags}, Parent, Sizer, In) ->
 				   end,
 		     UseHistory = fun(Ev, Obj) ->
 					  case use_history(Ev, Type, Ctrl) of
-					      {true, Prev}  -> 
-						  add_history(Type, Prev),
+					      {true, _Prev}  -> 
 						  PreviewFun();
 					      false -> 
 						  wxEvent:skip(Obj)
 					  end
 				  end,
-		     AddHistory = fun(_,_) -> 
+		     AddHistory = fun(_,Obj) -> 
 					  Str = wxTextCtrl:getValue(Ctrl),
+					  wxEvent:skip(Obj),
 					  case Validator(Str) of
 					      {true, _} -> add_history(Type, Str);
 					      false -> ignore
