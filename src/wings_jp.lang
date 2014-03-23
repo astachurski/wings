@@ -334,28 +334,7 @@
     {13,"選択されたツールや、修飾キーに対応するTweakツールパレットを開きます"}
    ]}
  ]}.
-{wings_ask,
- [
-  {button_label,
-   [
-    % "OK"
-    {1,"OK"}
-   ]},
-  {frame_event,
-   [
-    % "Expand this frame; collapse other frames"
-    {1,"オプションを開きます；他のオプションは閉じます"},
-    % "Expand this frame"
-    {2,"オプションを開く"},
-    % "Collapse this frame"
-    {3,"オプションを閉じる"}
-   ]},
-  {mktree,
-   [
-    % "Browse"
-    {1,"選択..."}
-   ]}
- ]}.
+
 {wings_body,
  [
   {arealight_conv,
