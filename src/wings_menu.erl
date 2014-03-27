@@ -2125,11 +2125,10 @@ submenu_help(Help, _, _) ->
     Help.
 
 wx_command_event(Id) ->
-    case ets:lookup(wings_menus, Id) of
-	[#menu_entry{name=Name}] -> {menubar, {action, Name}};
-	[] ->
-	    io:format("~p:~p: Unmatched event Id ~p~n",[?MODULE,?LINE,Id]),
-	    ignore
+    [#menu_entry{name=Name}] = ets:lookup(wings_menus, Id),
+    case ets:match(wings_state, {{bindkey,'$1'}, Name, '_'}) of
+	[] -> {menubar, {action, Name}};
+	[[KeyComb]] -> wings_io_wx:make_key_event(KeyComb)
     end.
 
 check_item(Name) ->
@@ -2166,7 +2165,7 @@ wx_menubar(Menus) ->
     ets:new(wings_menus, [named_table, {keypos,2}]),
     WinName = {menubar, geom},
     put(wm_active, WinName),
-    MB = wxFrame:getMenuBar(get(top_frame)),
+    MB = wxMenuBar:new(),
     Enter = fun({Str, Name, Fun}, Id) ->
 		    {Menu, NextId} = setup_menu([Name], Id, Fun),
 		    wxMenuBar:append(MB, Menu, Str),
@@ -2177,9 +2176,7 @@ wx_menubar(Menus) ->
 	    end,
     try
 	lists:foldl(Enter, 200, Menus),
-	%% Let wings handle the accelerators by itself
-	Accel = wxAcceleratorTable:new(),
-	wxWindow:setAcceleratorTable(get(top_frame), Accel),
+	wxFrame:setMenuBar(get(top_frame), MB),
 	ok
     catch _ : Reason ->
 	    io:format("CRASH ~p ~p~n",[Reason, erlang:get_stacktrace()]),
@@ -2258,8 +2255,12 @@ create_menu([], NextId, _, _) ->
 menu_item({Desc0, Name, Help, Props, HotKey}, Parent, Id, Names) ->
     Desc = case HotKey of
 	       [] -> Desc0;
-	       KeyStr -> Desc0 ++ "\t' " ++ KeyStr ++ " '"
-	       %%KeyStr -> Desc0 ++ "\t" ++ KeyStr
+	       KeyStr ->
+		   %% Quote to avoid windows stealing keys
+		   case os:type() of
+		       {win32, _} -> Desc0 ++ "\t'" ++ KeyStr ++ "'";
+		       _ -> Desc0 ++ "\t" ++ KeyStr
+		   end
 	   end,
     MenuId = predefined_item(hd(Names),Name, Id),
     Command = case have_option_box(Props) of
@@ -2311,11 +2312,15 @@ predefined_item(file, {recent_file,N}) -> ?wxID_FILE + N; %% Zero numbered
 predefined_item(menu, edit)    -> ?wxID_EDIT;
 predefined_item(edit, undo)    -> ?wxID_UNDO;
 predefined_item(edit, redo)    -> ?wxID_REDO;
+predefined_item(edit, preferences) -> ?wxID_PREFERENCES;
+predefined_item(edit, Fun) when is_function(Fun) -> ?wxID_PREFERENCES;
 %% Make it easy to find repeat
 predefined_item(edit, repeat)  -> ?REPEAT;
 predefined_item(edit, repeat_args) -> ?REPEAT_ARGS;
 predefined_item(edit, repeat_drag) -> ?REPEAT_DRAG;
-predefined_item(_, _) ->  false.
+predefined_item(_M, _C) ->
+    %% io:format("Ignore ~p ~p~n",[_M,_C]),
+    false.
 
 colorB({R,G,B,A}) -> {trunc(R*255),trunc(G*255),trunc(B*255),trunc(A*255)};
 colorB({R,G,B}) -> {trunc(R*255),trunc(G*255),trunc(B*255),255};
