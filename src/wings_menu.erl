@@ -2230,8 +2230,8 @@ create_menu([], NextId, _, _) ->
 menu_item({Desc0, Name, Help, Props, HotKey}, Parent, Id, Names) ->
     Desc = case HotKey of
 	       [] -> Desc0;
-	       KeyStr -> Desc0 ++ "\t' " ++ KeyStr ++ " '"
-	       %%KeyStr -> Desc0 ++ "\t" ++ KeyStr
+	       %KeyStr -> Desc0 ++ "\t' " ++ KeyStr ++ " '"
+	       KeyStr -> Desc0 ++ "\t" ++ KeyStr
 	   end,
     MenuId = case predefined_item(hd(Names),Name) of
 		 false -> Id;

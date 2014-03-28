@@ -371,8 +371,9 @@ sdl_key(#wxKey{type=Type,controlDown = Ctrl, shiftDown = Shift,
     %% maybe we should use (the translated) char events instead?
     ModState = gui_state(Mods, 0),
     Pressed = case Type of
-		  key_up -> ?SDL_RELEASED;
-		  key_down -> ?SDL_PRESSED
+		  char_hook -> ?SDL_PRESSED;
+		  key_up    -> ?SDL_RELEASED;
+		  key_down  -> ?SDL_PRESSED
 	      end,
     #keyboard{which=0, state=Pressed, scancode=Raw, unicode=lower(Shift, Uni),
 	      mod=ModState, sym=wx_key_map(lower(Shift, Code))}.

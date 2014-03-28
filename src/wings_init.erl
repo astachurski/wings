@@ -75,7 +75,15 @@ init() ->
 	     end,
 
     wxWindow:connect(Frame, close_window),
-    wxWindow:connect(Frame, command_menu_selected),
+    wxWindow:connect(Frame, command_menu_selected, [skip]),
+    %% MenuCB = fun(Ev,Obj) ->
+    %% 		     io:format("Menu ~p~n", [Ev]),
+    %% 		     wxEvent:skip(Obj)
+    %% 	     end,
+    %% wxWindow:connect(Frame, menu_open, [{callback, MenuCB}]),
+    %% wxWindow:connect(Frame, menu_highlight, [{callback, MenuCB}]),
+    %% wxWindow:connect(Frame, menu_close, [{callback, MenuCB}]),
+
     wxWindow:connect(Canvas, paint, [{callback, Redraw}]),
     wxWindow:connect(Canvas, size,  []),
     %% wxWindow:connect(Canvas, erase_background),
@@ -92,7 +100,8 @@ init() ->
     wxWindow:connect(Canvas, right_up),
     wxWindow:connect(Canvas, right_down),
     wxWindow:connect(Canvas, mousewheel),
-    wxWindow:connect(Canvas, key_down),
+    %    wxWindow:connect(Canvas, key_down),
+    wxWindow:connect(Frame, char_hook, []),
     set_icon(),
     wxWindow:setFocus(Canvas), %% Get keyboard focus
     wxWindow:connect(Frame, show),
