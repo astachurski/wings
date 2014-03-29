@@ -357,14 +357,14 @@ enter_dialog(true, PreviewType, Dialog, Fields, Fun) ->
 					 {lastId, ?wxID_NO},
 					 {callback,Forward}]),
 		       wxDialog:show(Dialog),
-		       wings_wm:psend(dialog_blanket, preview),
+		       wings_wm:psend(send_after_redraw, dialog_blanket, preview),
 		       receive closed -> ok end
 	       end),
     keep.
 
 notify_event_handler(false, _Msg) -> fun() -> ignore end;
 notify_event_handler(no_preview, _) -> fun() -> ignore end;
-notify_event_handler(_, Msg) -> fun() -> wings_wm:psend(dialog_blanket, Msg) end.
+notify_event_handler(_, Msg) -> fun() -> wings_wm:psend(send_once, dialog_blanket, Msg) end.
 
 event_handler(#wx{id=?wxID_CANCEL},
 	      #eh{dialog=Dialog, apply=Fun, owner=Owner}) ->
@@ -390,8 +390,9 @@ event_handler(preview, #eh{fs=Fields, apply=Fun, owner=Owner}) ->
 	    wings_wm:send_after_redraw(Owner, {update_state,St}),
 	    wings_wm:send(Owner, {current_state,St0});
 	{preview,Action,#st{}=St}->
-	    wings_wm:send_after_redraw(Owner, {action,Action}),
-	    wings_wm:send(Owner, {current_state,St});
+	    wings_wm:send_once_after_redraw(Owner, {action,Action}),
+	    wings_wm:send(Owner, {current_state,St}),
+	    keep;
 	Action = {numeric_preview, _} ->
 	    wings_wm:send(Owner, {action,Action});
 	Action when is_tuple(Action); is_atom(Action) ->
