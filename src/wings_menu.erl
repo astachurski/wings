@@ -1868,7 +1868,7 @@ setup_dialog(Parent, Entries0, Magnet, Pos) ->
     %% wxPanel:setBackgroundStyle(Panel, ?wxBG_STYLE_TRANSPARENT),
     wxPanel:setBackgroundColour(Panel, colorB(wings_pref:get_value(menu_color))),
     Sizer = wxBoxSizer:new(?wxVERTICAL),
-    MinHSzs = calc_min_sizes(Entries0, Panel, 0, 0),
+    MinHSzs = calc_min_sizes(Entries0, Panel, 5, 5),
     Entries = setup_popup(Entries0, 500, Sizer, MinHSzs, Panel, Magnet, []),
     Main = wxBoxSizer:new(?wxHORIZONTAL),
     wxSizer:add(Main, Sizer, [{proportion, 1},{border, 5},
@@ -1877,6 +1877,7 @@ setup_dialog(Parent, Entries0, Magnet, Pos) ->
     wxSizer:setSizeHints(Main, Dialog),
     wxPanel:setFocusIgnoringChildren(Panel),
     wxPanel:connect(Panel, kill_focus),
+    wxPanel:connect(Panel, char_hook),
     wxFrame:show(Dialog),
     {Dialog, Panel, Entries}.
 
@@ -1893,13 +1894,16 @@ popup_events(Dialog, Panel, Entries, Magnet, Previous, Ns, Owner) ->
 	#wx{event=#wxFocus{type=kill_focus}} ->
 	    wxFrame:destroy(Dialog),
 	    wings_wm:psend(Owner, cancel);
+	#wx{event=#wxKey{keyCode=?WXK_ESCAPE}} ->
+	    wxFrame:destroy(Dialog),
+	    wings_wm:psend(Owner, cancel);
 	#wx{id=Id, event=Ev=#wxMouse{type=What}}
 	  when What =:= left_up; What =:= right_up; What =:= middle_up ->
 	    wxFrame:destroy(Dialog),
 	    MagnetClick = Magnet orelse magnet_pressed(wings_msg:free_rmb_modifier(), Ev),
 	    popup_result(lists:keyfind(Id, 2, Entries), {What, MagnetClick}, Ns, Owner);
-	Ev = #wx{} ->
-	    io:format("Got Ev ~p ~n", [Ev]),
+	_Ev = #wx{} ->
+	    %% io:format("Got Ev ~p ~n", [_Ev]),
 	    popup_events(Dialog, Panel, Entries, Magnet, Previous, Ns, Owner)
     end.
 
@@ -1974,11 +1978,11 @@ calc_min_sizes([separator|Es], Win, C1, C2) ->
     calc_min_sizes(Es, Win, C1, C2);
 calc_min_sizes([{submenu, Desc, _, _, _, _}|Es], Win, C1, C2) ->
     {W, _, _, _} = wxWindow:getTextExtent(Win, Desc),
-    calc_min_sizes(Es, Win, max(W, C1), C2);
+    calc_min_sizes(Es, Win, max(W+5, C1), C2);
 calc_min_sizes([{Desc, _, _, _, HK}|Es], Win, C1, C2) ->
     {WStr, _, _, _} = wxWindow:getTextExtent(Win, Desc),
     {WHK, _, _, _} = wxWindow:getTextExtent(Win, HK),
-    calc_min_sizes(Es, Win, max(WStr, C1), max(WHK, C2));
+    calc_min_sizes(Es, Win, max(WStr+5, C1), max(WHK+5, C2));
 calc_min_sizes([], _, C1, C2) ->
     {C1, C2}.
 
