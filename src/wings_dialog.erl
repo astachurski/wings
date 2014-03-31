@@ -14,12 +14,16 @@
 -include("wings.hrl").
 -export([init/0,
 	 info/3,
-	 ask/3, ask/4,
-	 dialog/3, dialog/4]).
+	 ask/3, ask/4, ask/5,
+	 dialog/3, dialog/4,
+	 ask_preview/5, dialog_preview/5
+	]).
 
--compile(export_all).
+-export([enable/3, get_value/2, set_value/3]).
 
--record(in, {key, type, def, wx, validator, data}).
+%%-compile(export_all).
+
+-record(in, {key, type, def, wx, validator, data, hook}).
 -record(eh, {dialog, fs, apply, owner, type}).
 
 %%
@@ -284,13 +288,53 @@ dialog(Ask, Title, PreviewCmd, Qs0, Fun) when is_list(Qs0) ->
     dialog(Ask, Title, PreviewCmd, Qs, Fun);
 dialog(Ask, Title, PreviewCmd, Qs, Fun) when not is_list(Qs) ->
     case element(1,Qs) of
-	preview_cmd -> error(Qs);
+	preview -> error(Qs);
 	drag_preview_cmd -> error(Qs);
 	_Assert -> ok
     end,
     {Dialog, Fields} = build_dialog(Ask andalso PreviewCmd, Title, Qs),
     %% io:format("Enter Dialog ~p ~p ~p~n",[Ask,PreviewCmd, Fields]),
     enter_dialog(Ask, PreviewCmd, Dialog, Fields, Fun).
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Hook functions
+enable(Keys = [_|_], Bool, Store) ->
+    [enable(Key, Bool, Store) || Key <- Keys];
+enable(Key, Bool, Store) ->
+    #in{wx=Ctrl} = gb_trees:get(Key, Store),
+    wxWindow:enable(Ctrl, [{enable,Bool}]).
+
+get_value(Key, Store) ->
+    In = gb_trees:get(Key, Store),
+    case get_output(dummy, In) of
+	{_, Value} -> Value;
+	Value -> Value
+    end.
+
+set_value(Key, Value, Store) ->
+    set_value_impl(gb_trees:get(Key, Store),Value),
+    Store.
+
+set_value_impl(#in{wx=Ctrl, type=choice}, {Def, Entries}) when is_list(Entries) ->
+    wxChoice:clear(Ctrl),
+    lists:foldl(fun(Choice,N) -> setup_choices(Choice, Ctrl, Def, N) end, 0, Entries);
+set_value_impl(#in{wx=Ctrl, type=choice}, Def) ->
+    Count = wxChoice:getCount(Ctrl),
+    SetDef = fun(N) ->
+		     case wxChoice:getClientData(Ctrl, N) of
+			 Def -> wxChoice:setSelection(Ctrl, N), true;
+			 _ -> false
+		     end
+	     end,
+    true = lists:any(SetDef, lists:seq(0, Count-1));
+set_value_impl(#in{wx=Ctrl, type=text}, Val) ->
+    wxTextCtrl:setValue(Ctrl, to_str(Val));
+set_value_impl(#in{wx=Ctrl, type=slider, data={_, ToSlider}}, Val) ->
+    wxSlider:setValue(Ctrl, ToSlider(Val)).
+
+
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Helpers
@@ -367,14 +411,19 @@ notify_event_handler(no_preview, _) -> fun() -> ignore end;
 notify_event_handler(_, Msg) -> fun() -> wings_wm:psend(send_once, dialog_blanket, Msg) end.
 
 event_handler(#wx{id=?wxID_CANCEL},
-	      #eh{dialog=Dialog, apply=Fun, owner=Owner}) ->
+	      #eh{dialog=Dialog, apply=Fun, owner=Owner, type=Preview}) ->
     wxDialog:destroy(Dialog),
-    #st{}=St = Fun(cancel),
-    wings_wm:send(Owner, {update_state,St}),
+    case Preview of
+	preview ->
+	    #st{}=St = Fun(cancel),
+	    wings_wm:send(Owner, {update_state,St});
+	drag_preview ->
+	    wings_io:grab()
+    end,
     delete;
 event_handler(#wx{id=Result}=_Ev,
 	      #eh{dialog=Dialog, fs=Fields, apply=Fun, owner=Owner}) ->
-    %% io:format("Ev closing ~p~n",[_Ev]),
+    %%io:format("Ev closing ~p~n  ~p~n",[_Ev, Fields]),
     Values = [get_output(Result, Field) ||
 		 Field = #in{data=Data} <- Fields,
 		 Data =/= ignore],
@@ -428,13 +477,7 @@ get_output1(_, In=#in{type=choice, wx=Ctrl}) ->
     with_key(In,wxChoice:getClientData(Ctrl,wxChoice:getSelection(Ctrl)));
 get_output1(_, In=#in{type=text, def=Def, wx=Ctrl, validator=Validate}) ->
     Str = wxTextCtrl:getValue(Ctrl),
-    Res = if is_integer(Def) ->
-		  validate(Validate, Str, Def);
-	     is_float(Def)  ->
-		  validate(Validate, Str, Def);
-	     is_list(Def) ->
-		  Str
-	  end,
+    Res = validate(Validate, Str, Def),
     with_key(In, Res);
 get_output1(Result, In=#in{type=dialog_buttons}) ->
     Atom = case Result of
@@ -447,6 +490,54 @@ get_output1(Result, In=#in{type=dialog_buttons}) ->
 
 with_key(#in{key=undefined}, Value) -> Value;
 with_key(#in{key=Key}, Value) ->  {Key, Value}.
+
+setup_hooks(Fields) ->
+    {Fs, _} = lists:mapfoldl(fun(In=#in{key=undefined},N) -> {{N, In}, N+1};
+				(In=#in{key=Key}, N) -> {{Key, In}, N+1}
+			     end, 1,Fields),
+    Tree = gb_trees:from_orddict(lists:sort(Fs)),
+    [setup_hook(Field, Tree) || Field <- Fs].
+
+setup_hook({_, #in{hook=undefined}}, _) -> ok;
+setup_hook({Key, #in{wx=Ctrl, type=checkbox, hook=UserHook}}, Fields) ->
+    %% Setup callback
+    wxWindow:connect(Ctrl, command_checkbox_clicked,
+		     [{callback, fun(#wx{event=#wxCommand{commandInt=Int}}, Obj) ->
+					 wxEvent:skip(Obj),
+					 UserHook(Key, Int =/= 0, Fields)
+				 end}]),
+    %% And initiate
+    UserHook(Key, wxCheckBox:getValue(Ctrl), Fields);
+setup_hook({Key, #in{wx=Ctrl, type=choice, hook=UserHook}}, Fields) ->
+    wxWindow:connect(Ctrl, command_choice_selected,
+		     [{callback, fun(#wx{event=#wxCommand{commandInt=Int}}, Obj) ->
+					 wxEvent:skip(Obj),
+					 Sel = wxChoice:getClientData(Ctrl, Int),
+					 UserHook(Key, Sel, Fields)
+				 end}]),
+    UserHook(Key, wxChoice:getClientData(Ctrl,wxChoice:getSelection(Ctrl)), Fields);
+setup_hook({Key, #in{wx=Ctrl, type=radiobox, hook=UserHook, data=Keys}}, Fields) ->
+    wxWindow:connect(Ctrl, command_radiobox_selected,
+		     [{callback, fun(#wx{event=#wxCommand{commandInt=ZeroIndex}}, Obj) ->
+					 wxEvent:skip(Obj),
+					 Sel = lists:nth(ZeroIndex+1, Keys),
+					 UserHook(Key, Sel, Fields)
+				 end}]),
+    UserHook(Key, lists:nth(1+wxRadioBox:getSelection(Ctrl),Keys),Fields);
+setup_hook({Key, #in{wx=Ctrl, type=text, hook=UserHook, def=Def, validator=Validate}}, Fields) ->
+    wxWindow:connect(Ctrl, command_text_updated,
+		     [{callback, fun(#wx{event=#wxCommand{cmdString=Str}}, Obj) ->
+					 wxEvent:skip(Obj),
+					 Val = validate(Validate, Str, Def),
+					 io:format("Ev: ~p~n",[Val]),
+					 UserHook(Key, Val, Fields),
+					 ok
+				 end}]),
+    UserHook(Key,validate(Validate, wxTextCtrl:getValue(Ctrl), Def),Fields);
+
+setup_hook(_What, _) ->
+    io:format("Unknown hook for ~p~n",[_What]),
+    ok.
 
 return_result(Fun, Values, Owner) ->
     case Fun(Values) of
@@ -482,24 +573,27 @@ build_dialog(false, _Title, Qs) ->
     Fs = build(false, Qs, undefined, undefined, []),
     {undefined, lists:reverse(Fs)};
 build_dialog(AskType, Title, Qs) ->
-    Parent = get(top_frame),
-    Style  = {style, ?wxDEFAULT_DIALOG_STYLE bor ?wxRESIZE_BORDER},
-    Dialog = wxDialog:new(Parent, ?wxID_ANY, Title, [Style]),
-    Panel  = wxPanel:new(Dialog, []),
-    Top    = wxBoxSizer:new(?wxVERTICAL),
-    Sizer  = wxBoxSizer:new(?wxVERTICAL),
-    Fields0 = build(AskType, Qs, Panel, Sizer, []),
-    wxWindow:setSizer(Panel, Sizer),
-    wxSizer:add(Top, Panel, [{proportion, 1}, {flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
-    Fields = setup_buttons(Dialog, Top, Fields0),
-    wxWindow:setSizerAndFit(Dialog, Top),
-    {Dialog, lists:reverse(Fields)}.
+    wx:batch(fun() ->
+		     Parent = get(top_frame),
+		     Style  = {style, ?wxDEFAULT_DIALOG_STYLE bor ?wxRESIZE_BORDER},
+		     Dialog = wxDialog:new(Parent, ?wxID_ANY, Title, [Style]),
+		     Panel  = wxPanel:new(Dialog, []),
+		     Top    = wxBoxSizer:new(?wxVERTICAL),
+		     Sizer  = wxBoxSizer:new(?wxVERTICAL),
+		     Fields0 = build(AskType, Qs, Panel, Sizer, []),
+		     wxWindow:setSizer(Panel, Sizer),
+		     wxSizer:add(Top, Panel, [{proportion, 1}, {flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+		     Fields = setup_buttons(Dialog, Top, Fields0),
+		     wxWindow:setSizerAndFit(Dialog, Top),
+		     setup_hooks(Fields),
+		     {Dialog, Fields}
+	     end).
 
 setup_buttons(Dialog, Top, [DB=#in{type=dialog_buttons, wx=Fun}|In]) ->
     Object = Fun(Dialog, Top),
-    [DB#in{wx=Object}|In];
+    lists:reverse([DB#in{wx=Object}|In]);
 setup_buttons(_, _, Fields) ->
-    Fields.
+    lists:reverse(Fields).
 
 build(Ask, {vframe_dialog, Qs, Flags}, Parent, Sizer, []) ->
     Def = proplists:get_value(value, Flags, ?wxID_OK),
@@ -577,19 +671,25 @@ build(Ask, {label, Label, Flags}, Parent, Sizer, In)
     wxSizer:setItemMinSize(Sizer, Text, proplists:get_value(min_wsz, Flags, -1), -1),
     In;
 build(Ask, {label_column, Rows}, Parent, Sizer, In) ->
+    build(Ask, {label_column, Rows, []}, Parent, Sizer, In);
+build(Ask, {label_column, Rows, Flags}, Parent, Sizer, In) ->
     MinSize =
 	if Ask =:= false -> -1;
 	   true ->
 		ST = wxStaticText:new(Parent, ?wxID_ANY, ""),
-		lists:foldl(fun({Str,_}, Max) ->
+		lists:foldl(fun({Str = [_|_],_}, Max) ->
 				    {W, _, _, _} = wxWindow:getTextExtent(ST, Str),
-				    max(W+5, Max)
+				    max(W+5, Max);
+			       (separator, Max)  ->
+				    Max
 			    end, -1, Rows)
 	end,
     Translate = fun({String, Field}) ->
-			{hframe, [{label, String, [{min_wsz, MinSize}]}, Field]}
+			{hframe, [{label, String, [{min_wsz, MinSize}]}, Field]};
+		   (separator) ->
+			separator
 		end,
-    build(Ask, {vframe, lists:map(Translate, Rows)}, Parent, Sizer, In);
+    build(Ask, {vframe, lists:map(Translate, Rows), Flags}, Parent, Sizer, In);
 
 build(Ask, panel, _Parent, Sizer, In)
   when Ask =/= false ->
@@ -608,6 +708,7 @@ build(Ask, {text, Def, Flags}, Parent, Sizer, In) ->
     Create = fun() ->
 		     PreviewFun = notify_event_handler(Ask, preview),
 		     Ctrl = wxTextCtrl:new(Parent, ?wxID_ANY, [{value, to_str(Def)}]),
+		     tooltip(Ctrl, Flags),
 		     Type = type(Def),
 		     TextUpdated = fun(#wx{event=#wxCommand{cmdString=Str}},_) ->
 					   case Validator(Str) of
@@ -637,7 +738,7 @@ build(Ask, {text, Def, Flags}, Parent, Sizer, In) ->
 		     add_sizer(text, Sizer, Ctrl),
 		     Ctrl
 	     end,
-    [#in{key=proplists:get_value(key,Flags), def=Def,
+    [#in{key=proplists:get_value(key,Flags), def=Def, hook=proplists:get_value(hook, Flags),
 	 type=text, wx=create(Ask,Create), validator=Validator}|In];
 
 build(Ask, {slider, {text, Def, Flags}}, Parent, Sizer, In) ->
@@ -654,6 +755,7 @@ build(Ask, {slider, Flags}, Parent, Sizer, In) ->
     {Min, Value, Max, Style, ToText, ToSlider} = slider_style(Def, Range),
     Create = fun() ->
 		     Ctrl = wxSlider:new(Parent, ?wxID_ANY, Value, Min, Max, [{style, Style}]),
+		     tooltip(Ctrl, Flags),
 		     add_sizer(slider, Sizer, Ctrl),
 		     Ctrl
 	     end,
@@ -663,6 +765,7 @@ build(Ask, {slider, Flags}, Parent, Sizer, In) ->
 build(Ask, {color, Def, Flags}, Parent, Sizer, In) ->
     Create = fun() ->
 		     Ctrl = wxColourPickerCtrl:new(Parent, ?wxID_ANY, [{col, rgb256(Def)}]),
+		     tooltip(Ctrl, Flags),
 		     add_sizer(button, Sizer, Ctrl),
 		     Ctrl
 	     end,
@@ -681,6 +784,7 @@ build(Ask, {button, {text, Def, Flags}}, Parent, Sizer, In) ->
 						 [{style, What bor ?wxFLP_USE_TEXTCTRL},
 						  {path, Def},
 						  {wildcard, Filter}]),
+		     tooltip(Ctrl, Flags),
 		     add_sizer(button, Sizer, Ctrl),
 		     Ctrl
 	     end,
@@ -691,21 +795,12 @@ build(Ask, {menu, Entries, Def, Flags}, Parent, Sizer, In) ->
     Create =
 	fun() ->
 		Ctrl = wxChoice:new(Parent, ?wxID_ANY),
-		lists:foldl(fun({Str, Tag}, N) ->
-				    wxChoice:append(Ctrl, Str, Tag),
-				    Def =:= Tag andalso wxChoice:setSelection(Ctrl, N),
-				    N + 1;
-			       ({Str, Tag, Fs}, N) ->
-				    TT = proplists:get_value(info, Fs, ""),
-				    wxWindow:setToolTip(Ctrl, wxToolTip:new(TT)),
-				    wxChoice:append(Ctrl, Str, Tag),
-				    Def =:= Tag andalso wxChoice:setSelection(Ctrl, N),
-				    N + 1
-			    end, 0, Entries),
+		lists:foldl(fun(Choice,N) -> setup_choices(Choice, Ctrl, Def, N) end, 0, Entries),
+		tooltip(Ctrl, Flags),
 		add_sizer(choice, Sizer, Ctrl),
 		Ctrl
 	end,
-    [#in{key=proplists:get_value(key,Flags), def=Def,
+    [#in{key=proplists:get_value(key,Flags), def=Def, hook=proplists:get_value(hook, Flags),
 	 type=choice, wx=create(Ask,Create)}|In];
 
 build(Ask, {table, [Header|Rows], Flags}, Parent, Sizer, In) ->
@@ -752,11 +847,12 @@ build(Ask, {Label, Def, Flags}, Parent, Sizer, In)
   when is_boolean(Def) ->
     Create = fun() ->
 		     Ctrl = wxCheckBox:new(Parent, ?wxID_ANY, Label),
+		     tooltip(Ctrl, Flags),
 		     wxCheckBox:setValue(Ctrl, Def),
 		     add_sizer(checkbox, Sizer, Ctrl),
 		     Ctrl
 	     end,
-    [#in{key=proplists:get_value(key,Flags),
+    [#in{key=proplists:get_value(key,Flags), hook=proplists:get_value(hook, Flags),
 	 def=Def, type=checkbox, wx=create(Ask, Create)}|In];
 
 build(Ask, {help, Title, Fun}, Parent, Sizer, In) ->
@@ -804,15 +900,29 @@ build_radio(Ask, Def, Direction, Alternatives, Flags, Parent, Sizer, In) ->
 					   ?wxDefaultPosition, ?wxDefaultSize,
 					   Strs, [{majorDim, 1}, {style, Direction}]),
 		     add_sizer({radiobox, Direction}, Sizer, Ctrl),
+		     tooltip(Ctrl, Flags),
 		     wxRadioBox:setSelection(Ctrl, pos(Def, Keys)),
 		     Preview = fun(_, _) -> (notify_event_handler(Ask, preview))() end,
 		     wxRadioBox:connect(Ctrl, command_radiobox_selected,
 					[{callback, Preview}]),
 		     Ctrl
 	     end,
-    [#in{key=proplists:get_value(key,Flags),
+    [#in{key=proplists:get_value(key,Flags), hook=proplists:get_value(hook, Flags),
 	 def=Def, type=radiobox, wx=create(Ask, Create),
 	 data=Keys}|In].
+
+
+setup_choices({Str, Tag}, Ctrl, Def, N) ->
+    wxChoice:append(Ctrl, Str, Tag),
+    Def =:= Tag andalso wxChoice:setSelection(Ctrl, N),
+    N + 1;
+setup_choices({Str, Tag, Fs}, Ctrl, Def, N) ->
+    TT = proplists:get_value(info, Fs, ""),
+    wxWindow:setToolTip(Ctrl, wxToolTip:new(TT)),
+    wxChoice:append(Ctrl, Str, Tag),
+    Def =:= Tag andalso wxChoice:setSelection(Ctrl, N),
+    N + 1.
+
 
 create_slider(Ask, Def, Flags, Validator, Parent, TopSizer) when is_number(Def) ->
     Range = proplists:get_value(range, Flags),
@@ -823,6 +933,13 @@ create_slider(Ask, Def, Flags, Validator, Parent, TopSizer) when is_number(Def) 
     wxSizer:add(Sizer, Slider, [{proportion,2}, {flag, ?wxEXPAND}]),
     wxSizer:add(Sizer, Text,   [{proportion,1}]),
     add_sizer(slider, TopSizer, Sizer),
+    tooltip(Slider, Flags),
+    tooltip(Text, Flags),
+    case proplists:get_value(disable, Flags, false) of
+	true -> wxWindow:disable(Slider),wxWindow:disable(Text);
+	false -> ok
+    end,
+
     PreviewFun = notify_event_handler(Ask, preview),
     UpdateText = fun(#wx{event=#wxCommand{commandInt=Where}}, _) ->
 			 PreviewFun(),
@@ -844,7 +961,7 @@ create_slider(Ask, Def, Flags, Validator, Parent, TopSizer) when is_number(Def) 
 slider_style(Def, {Min, Max})
   when is_integer(Def), Def >= Min, Def =< Max, Min < Max ->
     ToInt = fun(Value) -> Value end,
-    {Min, Def, Max, ?wxSL_HORIZONTAL bor ?wxSL_LABELS, ToInt, ToInt};
+    {Min, Def, Max, ?wxSL_HORIZONTAL, ToInt, ToInt};
 slider_style(Def, {Min, Max})
   when is_float(Def), Def >= Min, Def =< Max, Min < Max ->
     ToSlider = fun(Value) ->
@@ -881,6 +998,12 @@ sizer_flags(_, ?wxVERTICAL)           -> {0, 0, ?wxEXPAND}.
 
 create(false, _) -> undefined;
 create(_, Fun) -> Fun().
+
+tooltip(Ctrl, Flags) ->
+    case proplists:get_value(info, Flags) of
+	undefined -> ok;
+	Str -> wxWindow:setToolTip(Ctrl, wxToolTip:new(Str))
+    end.
 
 to_str(Number) when is_integer(Number) ->
     integer_to_list(Number);
@@ -939,7 +1062,11 @@ table_row_to_html(Row) when is_list(Row) ->
     ["<tr>", ["<td>" ++ paragraph_to_html(Column) ++ "</td>" || Column <- Row], "</tr>"].
 
 %%%%%%%%%%%%%%%%%%%%
-validate(Fun, Input, Def) ->
+validate(Fun, Input, Def) when is_number(Def) ->
+    do_validate(Fun, Input, Def);
+validate(_, Input, _) ->
+    Input.
+do_validate(Fun, Input, Def) ->
     case Fun(Input) of
 	{true, Value} -> Value;
 	false -> Def
@@ -1087,10 +1214,10 @@ add_history(Type, [_|_]=Val)
 	    ets:delete(wings_history, {Type,pos})
     end.
 
-reset_history() ->
-    ets:delete(wings_history, {int,pos}),
-    ets:delete(wings_history, {float,pos}),
-    ets:delete(wings_history, {string,pos}).
+%% reset_history() ->
+%%     ets:delete(wings_history, {int,pos}),
+%%     ets:delete(wings_history, {float,pos}),
+%%     ets:delete(wings_history, {string,pos}).
 
 read_hist(Type, Step, Ctrl) ->
     [{_, Next}] = ets:lookup(wings_history, {Type,next}),
