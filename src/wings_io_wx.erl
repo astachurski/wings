@@ -40,6 +40,8 @@ init(Icons) ->
     put_state(#io{raw_icons=Icons,cursors=Cursors}).
 
 quit() ->
+    Frame = get(top_frame),
+    wxFrame:destroy(Frame),
     wx:destroy().
 
 get_process_option() ->
