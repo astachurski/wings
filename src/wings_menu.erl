@@ -15,6 +15,8 @@
 -export([is_popup_event/1,menu/5,popup_menu/4,build_command/2,
 	 kill_menus/0]).
 -export([wx_menubar/1, wx_command_event/1, check_item/1, str_clean/1]).
+-export([update_menu/3, update_menu/4]).
+
 -define(NEED_OPENGL, 1).
 -define(NEED_ESDL, 1).
 -include("wings.hrl").
@@ -2157,7 +2159,7 @@ update_menu(Menu, Item, Cmd, Help) ->
 		 MO
 	 end,
     wxMenuItem:setText(MI, Cmd),
-    is_list(Help) orelse wxMenuItem:setHelp(MI, Help).
+    is_list(Help) andalso wxMenuItem:setHelp(MI, Help).
 
 
 wx_menubar(Menus) ->
