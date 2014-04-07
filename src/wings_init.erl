@@ -100,8 +100,8 @@ init() ->
     wxWindow:connect(Canvas, right_up),
     wxWindow:connect(Canvas, right_down),
     wxWindow:connect(Canvas, mousewheel),
+    wxWindow:connect(Canvas, char_hook, []),
     wxWindow:connect(Canvas, key_down),
-    wxWindow:connect(Frame, char_hook, []),
     set_icon(),
     wxWindow:setFocus(Canvas), %% Get keyboard focus
     wxWindow:connect(Frame, show),

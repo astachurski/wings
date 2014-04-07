@@ -243,16 +243,6 @@ read_events(Eq0) ->
 
 read_events(Eq, Wait) ->
     receive
-	Ev = #wx{event=#wxKey{keyCode=Code}} ->
-	    case Code of
-		%% We don't want modifiers as keypresses,
-		%% we get it on windows
-		?WXK_ALT     -> read_events(Eq, Wait);
-		?WXK_SHIFT   -> read_events(Eq, Wait);
-		?WXK_CONTROL -> read_events(Eq, Wait);
-		_ ->
-		    read_events(queue:in(Ev, Eq))
-	    end;
 	Ev = #wx{} ->
 	    read_events(queue:in(Ev, Eq));
 	{timeout,Ref,{event,Event}} when is_reference(Ref) ->
@@ -377,15 +367,16 @@ sdl_key(#wxKey{type=Type,controlDown = Ctrl, shiftDown = Shift,
 		  key_up    -> ?SDL_RELEASED;
 		  key_down  -> ?SDL_PRESSED
 	      end,
-    io:format("EV ~p: ~p ~p ~p ~p ~p ~p~n", [Type, Ctrl, Shift, Alt, Meta, Code, Uni]),
-    
+    %% io:format("EV ~p: ~p ~p ~p ~p ~p ~p~n", [Type, Ctrl, Shift, Alt, Meta, Code, Uni]),
     #keyboard{which=0, state=Pressed, scancode=Raw, unicode=lower(Shift, Uni),
 	      mod=ModState, sym=wx_key_map(lower(Shift, Code))}.
 
 lower(false, Char) -> string:to_lower(Char);
 lower(_, Char) -> Char.
 
-wx_key_map(?WXK_ALT) -> ?KMOD_ALT;
+wx_key_map(?WXK_SHIFT) -> ?SDLK_LSHIFT;
+wx_key_map(?WXK_ALT) -> ?SDLK_LALT;
+wx_key_map(?WXK_CONTROL) -> ?SDLK_LCTRL;
 wx_key_map(?WXK_F1) -> ?SDLK_F1;
 wx_key_map(?WXK_F2) -> ?SDLK_F2;
 wx_key_map(?WXK_F3) -> ?SDLK_F3;
@@ -436,7 +427,10 @@ wx_key_map(?WXK_WINDOWS_RIGHT) -> ?SDLK_RSUPER;
 %%wx_key_map(?) -> ?;
 wx_key_map(Code) -> Code.
 
-sdl_key_map(?KMOD_ALT) ->  ?WXK_ALT;
+sdl_key_map(?SDLK_LSHIFT) -> ?WXK_SHIFT;
+sdl_key_map(?SDLK_LALT) -> ?WXK_ALT;
+sdl_key_map(?SDLK_LCTRL) -> ?WXK_CONTROL;
+
 sdl_key_map(?SDLK_F1)  ->  ?WXK_F1;
 sdl_key_map(?SDLK_F2)  ->  ?WXK_F2;
 sdl_key_map(?SDLK_F3)  ->  ?WXK_F3;
