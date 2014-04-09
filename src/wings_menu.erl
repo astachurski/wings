@@ -2257,7 +2257,12 @@ create_menu([], NextId, _, _) ->
 menu_item({Desc0, Name, Help, Props, HotKey}, Parent, Id, Names) ->
     Desc = case HotKey of
 	       [] -> Desc0;
-	       KeyStr -> Desc0 ++ "\t" ++ KeyStr
+	       KeyStr -> 
+		   %% Quote to avoid windows stealing keys
+		   case os:type() of
+		       {win32, _} -> Desc0 ++ "\t'" ++ KeyStr ++ "'";
+		       _ -> Desc0 ++ "\t" ++ KeyStr
+		   end
 	   end,
     MenuId = predefined_item(hd(Names),Name, Id),
     Command = case have_option_box(Props) of
