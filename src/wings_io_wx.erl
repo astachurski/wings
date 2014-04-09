@@ -31,6 +31,8 @@
 -export([reset_grab/0,grab/0,ungrab/2,is_grabbed/0,warp/2]).
 -export([reset_video_mode_for_gl/2, swapBuffers/0]).
 
+-export([make_key_event/1]).
+
 -import(lists, [flatmap/2,member/2,reverse/1,reverse/2]).
 
 -import(wings_io, [put_state/1, get_state/0]).
@@ -370,6 +372,18 @@ sdl_key(#wxKey{type=Type,controlDown = Ctrl, shiftDown = Shift,
     %% io:format("EV ~p: ~p ~p ~p ~p ~p ~p~n", [Type, Ctrl, Shift, Alt, Meta, Code, Uni]),
     #keyboard{which=0, state=Pressed, scancode=Raw, unicode=lower(Shift, Uni),
 	      mod=ModState, sym=wx_key_map(lower(Shift, Code))}.
+
+make_key_event({Key, Mods}) ->
+    Map = fun(ctrl) -> {true, ?KMOD_CTRL};
+	     (alt)  -> {true, ?KMOD_ALT};
+	     (meta) -> {true, ?KMOD_META};
+	     (shift) -> {true, ?KMOD_SHIFT}
+	  end,
+    ModState = gui_state([Map(Mod) || Mod <- Mods], 0),
+    #keyboard{which=menubar, state=true, unicode=Key, mod=ModState, sym=Key};
+make_key_event(Key) when is_integer(Key) ->
+    make_key_event({Key, []}).
+
 
 lower(false, Char) -> string:to_lower(Char);
 lower(_, Char) -> Char.

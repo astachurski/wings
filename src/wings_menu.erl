@@ -2125,11 +2125,10 @@ submenu_help(Help, _, _) ->
     Help.
 
 wx_command_event(Id) ->
-    case ets:lookup(wings_menus, Id) of
-	[#menu_entry{name=Name}] -> {menubar, {action, Name}};
-	[] ->
-	    io:format("~p:~p: Unmatched event Id ~p~n",[?MODULE,?LINE,Id]),
-	    ignore
+    [#menu_entry{name=Name}] = ets:lookup(wings_menus, Id),
+    case ets:match(wings_state, {{bindkey,'$1'}, Name, '_'}) of
+	[] -> {menubar, {action, Name}};
+	[[KeyComb]] -> wings_io_wx:make_key_event(KeyComb)
     end.
 
 check_item(Name) ->
@@ -2258,13 +2257,7 @@ create_menu([], NextId, _, _) ->
 menu_item({Desc0, Name, Help, Props, HotKey}, Parent, Id, Names) ->
     Desc = case HotKey of
 	       [] -> Desc0;
-	       KeyStr -> 
-		   case os:type() of 
-		       {win32, _} -> %% Quote to avoid windows stealing keys
-			   Desc0 ++ "\t'" ++ KeyStr ++ "'";
-		       _ ->
-			   Desc0 ++ "\t" ++ KeyStr
-		   end
+	       KeyStr -> Desc0 ++ "\t" ++ KeyStr
 	   end,
     MenuId = predefined_item(hd(Names),Name, Id),
     Command = case have_option_box(Props) of
