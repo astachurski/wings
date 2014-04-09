@@ -286,7 +286,7 @@ keyname(C) -> [$<|integer_to_list(C)++">"].
 
 modname(Mods) ->
     case get(wings_os_type) of
-%%	{unix,darwin} -> mac_modname(Mods, []);
+	{unix,darwin} -> mac_modname(Mods);
 	_ -> modname_1(Mods)
     end.
 
@@ -294,11 +294,10 @@ modname_1([command|T]) -> "Meta+" ++modname_1(T);
 modname_1([Mod|T]) -> wings_s:modkey(Mod) ++ "+" ++modname_1(T);
 modname_1([]) -> [].
 
-%% mac_modname([ctrl|T], Acc) -> [$^|mac_modname(T, Acc)];
-%% mac_modname([shift|T], Acc) -> mac_modname(T, [shift|Acc]);
-%% mac_modname([alt|T], Acc) -> mac_modname(T, [option|Acc]);
-%% mac_modname([command|T], Acc) -> mac_modname(T, Acc++[command]);
-%% mac_modname([], Acc) -> Acc.
+mac_modname([ctrl|T]) -> "rawctrl+" ++ mac_modname(T);
+mac_modname([command|T]) -> "Ctrl+" ++ mac_modname(T);
+mac_modname([Mod|T]) -> wings_s:modkey(Mod) ++ "+" ++ mac_modname(T);
+mac_modname([]) -> [].
 
 vkeyname(?SDLK_BACKSPACE) -> ?STR(vkeyname,1,"Bksp");
 vkeyname(?SDLK_TAB) -> ?STR(vkeyname,2,"Tab");

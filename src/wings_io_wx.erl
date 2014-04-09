@@ -377,7 +377,8 @@ make_key_event({Key, Mods}) ->
     Map = fun(ctrl) -> {true, ?KMOD_CTRL};
 	     (alt)  -> {true, ?KMOD_ALT};
 	     (meta) -> {true, ?KMOD_META};
-	     (shift) -> {true, ?KMOD_SHIFT}
+	     (shift) -> {true, ?KMOD_SHIFT};
+	     (command) -> {true, ?KMOD_CTRL}
 	  end,
     ModState = gui_state([Map(Mod) || Mod <- Mods], 0),
     #keyboard{which=menubar, state=true, unicode=Key, mod=ModState, sym=Key};
