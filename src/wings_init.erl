@@ -27,9 +27,6 @@ init() ->
     TopSize = wings_pref:get_value(window_size),
     Frame = wxFrame:new(wx:null(), -1, "Wings 3D", [{size, TopSize}]),
 
-    MB = wxMenuBar:new(),
-    wxFrame:setMenuBar(Frame, MB),
-
     GLAttrs = [?WX_GL_RGBA,
 	       ?WX_GL_MIN_RED,8,?WX_GL_MIN_GREEN,8,?WX_GL_MIN_BLUE,8,
 	       ?WX_GL_DEPTH_SIZE, 24, ?WX_GL_STENCIL_SIZE, 8,

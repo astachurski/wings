@@ -297,14 +297,16 @@ wx_translate_1(#wx{event=Ev=#wxMouse{}}) ->
     sdl_mouse(Ev);
 wx_translate_1(#wx{event=Ev=#wxKey{}}) ->
     R = sdl_key(Ev),
-%%    erlang:display(R),
+    %% erlang:display({sdlkey, R}),
     R;
 wx_translate_1(#wx{event=#wxClose{}}) ->
     quit;
 wx_translate_1(#wx{event=#wxSize{size={W,H}}}) ->
     #resize{w=W,h=H};
 wx_translate_1(#wx{id=Id, event=#wxCommand{type=command_menu_selected}}) ->
-    wings_menu:wx_command_event(Id);
+    ME = wings_menu:wx_command_event(Id),
+    %% io:format("ME ~p~n",[ME]),
+    ME;
 wx_translate_1(Ev) ->
     io:format("~p: Bug Ignored Event~p~n",[?MODULE, Ev]),
     redraw.
@@ -313,7 +315,7 @@ sdl_mouse(M=#wxMouse{type=Type,
 		     x = X, y = Y,
 		     leftDown=Left, middleDown=Middle, rightDown=Right,
 		     controlDown = Ctrl, shiftDown = Shift,
-		   altDown = Alt,      metaDown = Meta,
+		     altDown = Alt,      metaDown = Meta,
 		     wheelRotation=Wheel
 		    }) ->
     Mods = [{Ctrl, ?KMOD_CTRL}, {Shift, ?KMOD_SHIFT},
@@ -378,9 +380,10 @@ make_key_event({Key, Mods}) ->
 	     (alt)  -> {true, ?KMOD_ALT};
 	     (meta) -> {true, ?KMOD_META};
 	     (shift) -> {true, ?KMOD_SHIFT};
-	     (command) -> {true, ?KMOD_CTRL}
+	     (command) -> {true, ?KMOD_META}
 	  end,
     ModState = gui_state([Map(Mod) || Mod <- Mods], 0),
+    %% io:format("make key {~p, ~p} => ~p ~n",[Key, Mods, ModState]),
     #keyboard{which=menubar, state=true, unicode=Key, mod=ModState, sym=Key};
 make_key_event(Key) when is_integer(Key) ->
     make_key_event({Key, []}).
