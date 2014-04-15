@@ -18,6 +18,11 @@
 -define(NEED_ESDL, 1).
 -include("wings.hrl").
 
+-ifndef(WX_GL_SAMPLE_BUFFERS).     %% New in wxWidgets-3.0
+-define(WX_GL_SAMPLE_BUFFERS,17).  %% 1 for multisampling support (antialiasing)
+-define(WX_GL_SAMPLES,18).         %% 4 for 2x2 antialiasing supersampling on most graphics cards
+-endif.
+
 init() ->
     wx:new(),
     macosx_workaround(),
@@ -30,7 +35,10 @@ init() ->
     GLAttrs = [?WX_GL_RGBA,
 	       ?WX_GL_MIN_RED,8,?WX_GL_MIN_GREEN,8,?WX_GL_MIN_BLUE,8,
 	       ?WX_GL_DEPTH_SIZE, 24, ?WX_GL_STENCIL_SIZE, 8,
-	       ?WX_GL_DOUBLEBUFFER,0],
+	       ?WX_GL_DOUBLEBUFFER,
+	       ?WX_GL_SAMPLE_BUFFERS,1,
+	       ?WX_GL_SAMPLES, 4,
+	       0],
     Canvas = wxGLCanvas:new(Frame, [
 				    {attribList, GLAttrs},
 				    {style,
