@@ -341,7 +341,8 @@ match_hotkey(Name, [{{Name,false},Key}|_], true) -> Key;
 match_hotkey(Name, [{{Name,true},Key}|_], true) -> Key;
 match_hotkey(Name, [_|T], OptionBox) ->
     match_hotkey(Name, T, OptionBox);
-match_hotkey(_, [], _) -> [].
+match_hotkey(_N, [], _) ->
+    [].
 
 reduce_name({'ASK',_}=Ask) -> Ask;
 reduce_name({Key,{_,_}=Tuple}) when is_atom(Key) ->
@@ -565,7 +566,6 @@ do_action(Act0, Ns, Ps, #mi{flags=Flags} = Mi) ->
 
 send_action(Action, #mi{type=popup,ns=Names,owner=Owner,orig_xy=OrigXY}=Mi) ->
     Name = lists:last(Names),
-    io:format("Send action: ~p~n",[Action]),
     case wings_pref:get_value(menu_toolbar) of
       true when Name =:= select ->
         wings_wm:send_after_redraw(Owner, {menu_toolbar, OrigXY}),
@@ -2206,37 +2206,37 @@ setup_menu(Names, Id, Menus0) ->
 normalize_menu_wx(separator, _, _) -> separator;
 normalize_menu_wx({S,Fun,Help,Ps}, Hotkeys, Ns) when is_function(Fun) ->
     Name = Fun(1, Ns),
-    HK = match_hotkey(Name, Hotkeys, have_option_box(Ps)),
+    HK = match_hotkey(reduce_name(Name), Hotkeys, have_option_box(Ps)),
     %% io:format("Norm: ~p~n",[Name]),
     {S,Fun,Help,Ps,HK};
 normalize_menu_wx({S, {Name, SubMenu}}, Hotkeys, Ns)
   when is_list(SubMenu); is_function(SubMenu) ->
-    HK = match_hotkey(Name, Hotkeys, false),
+    HK = match_hotkey(reduce_name(Name), Hotkeys, false),
     {submenu, S, {Name, SubMenu}, submenu_help("", SubMenu, [Name|Ns]), [], HK};
 normalize_menu_wx({S, {Name, SubMenu}, Ps}, Hotkeys, Ns)
   when is_list(SubMenu); is_function(SubMenu) ->
-    HK = match_hotkey(Name, Hotkeys, false),
+    HK = match_hotkey(reduce_name(Name), Hotkeys, false),
     {submenu, S, {Name, SubMenu}, submenu_help("", SubMenu, [Name|Ns]), Ps, HK};
 normalize_menu_wx({S,{Name,Fun},Help,Ps}, Hotkeys, Ns)
   when is_function(Fun) ->
-    HK = match_hotkey(Name, Hotkeys, have_option_box(Ps)),
+    HK = match_hotkey(reduce_name(Name), Hotkeys, have_option_box(Ps)),
     {submenu, S, {Name, Fun}, submenu_help(Help, Fun, [Name|Ns]), Ps, HK};
 normalize_menu_wx({S,Name,Help,Ps}, Hotkeys, _Ns) ->
-    HK = match_hotkey(Name, Hotkeys, have_option_box(Ps)),
+    HK = match_hotkey(reduce_name(Name), Hotkeys, have_option_box(Ps)),
     {S,Name,Help,Ps,HK};
 normalize_menu_wx({S,Name}, Hotkeys, _Ns) ->
-    HK = match_hotkey(Name, Hotkeys, false),
+    HK = match_hotkey(reduce_name(Name), Hotkeys, false),
     {S,Name,[],[],HK};
 normalize_menu_wx({S,Name,[C|_]=Help}, Hotkeys, _Ns)
   when is_integer(C) ->
-    HK = match_hotkey(Name, Hotkeys, false),
+    HK = match_hotkey(reduce_name(Name), Hotkeys, false),
     {S,Name,Help,[], HK};
 normalize_menu_wx({S,Name,Help}, Hotkeys, _Ns)
   when is_tuple(Help), tuple_size(Help) =< 3 ->
-    HK = match_hotkey(Name, Hotkeys, false),
+    HK = match_hotkey(reduce_name(Name), Hotkeys, false),
     {S,Name,Help,[], HK};
 normalize_menu_wx({S,Name,Ps},Hotkeys, _Ns) ->
-    HK = match_hotkey(Name, Hotkeys, have_option_box(Ps)),
+    HK = match_hotkey(reduce_name(Name), Hotkeys, have_option_box(Ps)),
     {S,Name,[],Ps, HK}.
 
 create_menu([separator|Rest], Id, Names, Menu) ->
