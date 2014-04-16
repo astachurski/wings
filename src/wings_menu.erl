@@ -1876,8 +1876,9 @@ setup_dialog(Parent, Entries0, Magnet, Pos) ->
     wxPanel:setSizer(Panel, Main),
     wxSizer:setSizeHints(Main, Dialog),
     wxPanel:setFocusIgnoringChildren(Panel),
+    catch wxFrame:connect(Dialog, activate), %% Not available in OTP 17.0
     wxPanel:connect(Panel, kill_focus),
-    wxPanel:connect(Panel, char_hook),
+    wxPanel:connect(Panel, key_down),
     wxFrame:show(Dialog),
     {Dialog, Panel, Entries}.
 
@@ -1891,10 +1892,10 @@ popup_events(Dialog, Panel, Entries, Magnet, Previous, Ns, Owner) ->
 	    #menu_pop{msg=Msg} = lists:keyfind(Id, 2, Entries),
 	    wings_wm:psend(Owner, {message, Msg}),
 	    popup_events(Dialog, Panel, Entries, Magnet, Line, Ns, Owner);
-	#wx{event=#wxFocus{type=kill_focus}} ->
+	#wx{event=#wxKey{keyCode=?WXK_ESCAPE}} ->
 	    wxFrame:destroy(Dialog),
 	    wings_wm:psend(Owner, cancel);
-	#wx{event=#wxKey{keyCode=?WXK_ESCAPE}} ->
+	#wx{event=#wxFocus{type=kill_focus}} ->
 	    wxFrame:destroy(Dialog),
 	    wings_wm:psend(Owner, cancel);
 	#wx{id=Id, event=Ev=#wxMouse{type=What}}
@@ -1902,6 +1903,10 @@ popup_events(Dialog, Panel, Entries, Magnet, Previous, Ns, Owner) ->
 	    wxFrame:destroy(Dialog),
 	    MagnetClick = Magnet orelse magnet_pressed(wings_msg:free_rmb_modifier(), Ev),
 	    popup_result(lists:keyfind(Id, 2, Entries), {What, MagnetClick}, Ns, Owner);
+	#wx{event=Ev} %% #wxActivate{active=false} not in 17.0
+	  when element(1, Ev) =:= wxActivate, element(3, Ev) =:= false ->
+	    wxFrame:destroy(Dialog),
+	    wings_wm:psend(Owner, cancel);
 	_Ev = #wx{} ->
 	    %% io:format("Got Ev ~p ~n", [_Ev]),
 	    popup_events(Dialog, Panel, Entries, Magnet, Previous, Ns, Owner)
