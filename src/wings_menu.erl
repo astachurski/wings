@@ -14,7 +14,7 @@
 -module(wings_menu).
 -export([is_popup_event/1,menu/5,popup_menu/4,build_command/2,
 	 kill_menus/0]).
--export([wx_menubar/1, wx_command_event/1, check_item/1, str_clean/1]).
+-export([wx_menubar/1, id_to_name/1, check_item/1, str_clean/1]).
 -export([update_menu/3, update_menu/4]).
 
 -define(NEED_OPENGL, 1).
@@ -59,8 +59,6 @@
 -define(REPEAT_ARGS, 98).
 -define(REPEAT_DRAG, 97).
 
--record(menu_entry, {wxid, name, object, type}).
-
 -record(menu_pop,
 	{wxid,
 	 name,
@@ -68,6 +66,9 @@
 	 opts,
 	 msg=""
 	}).
+
+%% Top level menu entries
+-record(menu_entry, {wxid, name, object, type}).
 
 %%%
 %%% Inside this module, each entry in a menu is kept in the following
@@ -2129,13 +2130,6 @@ submenu_help([], Fun, Ns) when is_function(Fun) ->
 submenu_help(Help, _, _) ->
     Help.
 
-wx_command_event(Id) ->
-    [#menu_entry{name=Name}] = ets:lookup(wings_menus, Id),
-    case ets:match(wings_state, {{bindkey,'$1'}, Name, '_'}) of
-	[] -> {menubar, {action, Name}};
-	[[KeyComb]] -> wings_io_wx:make_key_event(KeyComb)
-    end.
-
 check_item(Name) ->
     case ets:match_object(wings_menus, #menu_entry{name=Name, type=?wxITEM_CHECK, _ = '_'}) of
 	[] -> ok;
@@ -2189,6 +2183,10 @@ wx_menubar(Menus) ->
     end,
     erase(wm_active),
     ok.
+
+id_to_name(Id) ->
+    [#menu_entry{name=Name}] = ets:lookup(wings_menus, Id),
+    Name.
 
 setup_menu(Names, Id, Menus0) ->
     Menu   = wxMenu:new(),
