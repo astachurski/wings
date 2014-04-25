@@ -158,27 +158,29 @@ wx_popup_menu(X0,Y0,Names,Menus0,Magnet,Owner) ->
     keep.
 
 setup_dialog(Parent, Entries0, Magnet, Pos) ->
-    Dialog = wxFrame:new(Parent, ?wxID_ANY, "Operation",
-			 [{style, ?wxSTAY_ON_TOP bor ?wxFRAME_NO_TASKBAR},
-			  {size, {100, 600}},
-			  {pos, Pos}
-			 ]),
+    Style0 = ?wxSTAY_ON_TOP bor ?wxFRAME_TOOL_WINDOW,
+    Style = case os:type() of
+		%% Give some shadows around menu
+		{unix, darwin} -> Style0 bor ?wxFRAME_EX_METAL;
+		_ -> Style0
+	    end,
+    Dialog = wxFrame:new(Parent, ?wxID_ANY, "Operation", [{style, Style}, {pos, Pos}]),
     Panel = wxPanel:new(Dialog),
     %% wxPanel:setBackgroundStyle(Panel, ?wxBG_STYLE_TRANSPARENT),
     wxPanel:setBackgroundColour(Panel, colorB(wings_pref:get_value(menu_color))),
+    Main = wxBoxSizer:new(?wxHORIZONTAL),
     Sizer = wxBoxSizer:new(?wxVERTICAL),
     MinHSzs = calc_min_sizes(Entries0, Panel, 5, 5),
     Entries = setup_popup(Entries0, 500, Sizer, MinHSzs, Panel, Magnet, []),
-    Main = wxBoxSizer:new(?wxHORIZONTAL),
-    wxSizer:add(Main, Sizer, [{proportion, 1},{border, 5},
-			      {flag, ?wxEXPAND bor ?wxALL}]),
+    wxSizer:setMinSize(Sizer, 150, -1),
+    wxSizer:add(Main, Sizer, [{proportion, 1}, {border, 5}, {flag, ?wxEXPAND bor ?wxALL}]),
     wxPanel:setSizer(Panel, Main),
     wxSizer:setSizeHints(Main, Dialog),
     wxPanel:setFocusIgnoringChildren(Panel),
     catch wxFrame:connect(Dialog, activate), %% Not available in OTP 17.0
     wxPanel:connect(Panel, kill_focus),
     wxPanel:connect(Panel, key_down),
-    wxFrame:show(Dialog),
+    wxTopLevelWindow:show(Dialog),
     {Dialog, Panel, Entries}.
 
 popup_events(Dialog, Panel, Entries, Magnet, Previous, Ns, Owner) ->
@@ -192,19 +194,19 @@ popup_events(Dialog, Panel, Entries, Magnet, Previous, Ns, Owner) ->
 	    wings_wm:psend(Owner, {message, Msg}),
 	    popup_events(Dialog, Panel, Entries, Magnet, Line, Ns, Owner);
 	#wx{event=#wxKey{keyCode=?WXK_ESCAPE}} ->
-	    wxFrame:destroy(Dialog),
+	    wxWindow:destroy(Dialog),
 	    wings_wm:psend(Owner, cancel);
 	#wx{event=#wxFocus{type=kill_focus}} ->
-	    wxFrame:destroy(Dialog),
+	    wxWindow:destroy(Dialog),
 	    wings_wm:psend(Owner, cancel);
 	#wx{id=Id, event=Ev=#wxMouse{type=What}}
 	  when What =:= left_up; What =:= right_up; What =:= middle_up ->
-	    wxFrame:destroy(Dialog),
+	    wxWindow:destroy(Dialog),
 	    MagnetClick = Magnet orelse magnet_pressed(wings_msg:free_rmb_modifier(), Ev),
 	    popup_result(lists:keyfind(Id, 2, Entries), {What, MagnetClick}, Ns, Owner);
 	#wx{event=Ev} %% #wxActivate{active=false} not in 17.0
 	  when element(1, Ev) =:= wxActivate, element(3, Ev) =:= false ->
-	    wxFrame:destroy(Dialog),
+	    wxWindow:destroy(Dialog),
 	    wings_wm:psend(Owner, cancel);
 	_Ev = #wx{} ->
 	    %% io:format("Got Ev ~p ~n", [_Ev]),
@@ -303,7 +305,7 @@ setup_popup([{submenu, Desc, Name, Help0, Ps, _HK}|Es], Id, Sizer, Sz, Parent, M
     setup_colors([Panel], colorB(menu_color), colorB(menu_text)),
     Line = wxBoxSizer:new(?wxHORIZONTAL),
     wxSizer:addSpacer(Line, 3),
-    wxSizer:add(Line, T1 = wxStaticText:new(Panel, Id, Desc),[{proportion, 1}]),
+    wxSizer:add(Line, T1 = wxStaticText:new(Panel, Id, Desc),[{proportion, 1},{flag, ?wxALIGN_CENTER}]),
     wxPanel:setSizerAndFit(Panel, Line),
     wxSizer:add(Sizer, Panel, [{flag, ?wxEXPAND},{proportion, 1}]),
     Help = if Help0 =:= [] -> Desc ++ ?__(1," submenu");
@@ -319,10 +321,11 @@ setup_popup([{Desc, Name, Help, Props, HK}|Es], Id, Sizer, Sz = {Sz1,Sz2}, Paren
     setup_colors([Panel], colorB(menu_color), colorB(menu_text)),
     Line  = wxBoxSizer:new(?wxHORIZONTAL),
     wxSizer:addSpacer(Line, 3),
-    wxSizer:add(Line, T1 = wxStaticText:new(Panel, Id, Desc),[{proportion, 0}]),
+    wxSizer:add(Line, T1 = wxStaticText:new(Panel, Id, Desc),[{proportion, 0},{flag, ?wxALIGN_CENTER}]),
     wxSizer:setItemMinSize(Line, T1, Sz1, -1),
     wxSizer:addSpacer(Line, 10),
-    wxSizer:add(Line, T2 = wxStaticText:new(Panel, Id, HK),  [{proportion, 0}]),
+    wxSizer:addStretchSpacer(Line),
+    wxSizer:add(Line, T2 = wxStaticText:new(Panel, Id, HK),  [{proportion, 0},{flag, ?wxALIGN_CENTER}]),
     wxSizer:setItemMinSize(Line, T2, Sz2, -1),
     wxSizer:addSpacer(Line, 10),
     BM = case OpBox = have_option_box(Props) of
