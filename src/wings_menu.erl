@@ -20,7 +20,7 @@
 
 -define(NEED_ESDL, 1).
 -include("wings.hrl").
--import(lists, [map/2,foldl/3,reverse/1,keyfind/3,foreach/2]).
+-import(lists, [foldl/3,reverse/1]).
 
 -define(REPEAT, 99).
 -define(REPEAT_ARGS, 98).
@@ -517,7 +517,7 @@ normalize_menu_wx({S, {Name, SubMenu}, Ps}, Hotkeys, Ns)
     HK = match_hotkey(reduce_name(Name), Hotkeys, false),
     {submenu, S, {Name, SubMenu}, submenu_help("", SubMenu, [Name|Ns]), Ps, HK};
 normalize_menu_wx({S,{Name,Fun},Help,Ps}, Hotkeys, Ns)
-  when is_function(Fun) ->
+  when is_function(Fun); is_list(Fun) ->
     HK = match_hotkey(reduce_name(Name), Hotkeys, have_option_box(Ps)),
     {submenu, S, {Name, Fun}, submenu_help(Help, Fun, [Name|Ns]), Ps, HK};
 normalize_menu_wx({S,Name,Help,Ps}, Hotkeys, _Ns) ->
