@@ -53,9 +53,8 @@ lang: all
 #
 .PHONY: win32
 win32: all lang
-	(cd plugins_src/win32_file; $(MAKE))
 	(cd win32; $(MAKE))
-	win32/make_installer
+	escript tools/release
 
 #
 # Build a package for MacOS X.
