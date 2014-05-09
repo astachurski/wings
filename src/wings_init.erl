@@ -62,7 +62,11 @@ init() ->
     %% wxWindow:connect(Frame, menu_highlight, [{callback, MenuCB}]),
     %% wxWindow:connect(Frame, menu_close, [{callback, MenuCB}]),
 
-    wxWindow:connect(Canvas, paint, [{callback, fun redraw/2}]),
+    case os:type() of
+	{unix, _} ->  wxWindow:connect(Canvas, paint, [skip]);
+	{win32, _} -> wxWindow:connect(Canvas, paint, [{callback, fun redraw/2}])
+    end,
+
     wxWindow:connect(Canvas, size,  []),
     wxWindow:connect(Frame, close_window),
     wxWindow:connect(Frame, command_menu_selected, [skip]),
@@ -91,7 +95,6 @@ init() ->
 
 redraw(Ev = #wx{obj=Canvas},_) ->
     %% Must do a PaintDC and destroy it
-    wxGLCanvas:setCurrent(Canvas),
     DC = wxPaintDC:new(Canvas),
     wxPaintDC:destroy(DC),
     wings ! Ev.
