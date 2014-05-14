@@ -24,7 +24,7 @@
 %%-compile(export_all).
 
 -record(in, {key, type, def, wx, validator, data, hook}).
--record(eh, {dialog, fs, apply, owner, type}).
+-record(eh, {fs, apply, owner, type}).
 
 %%
 %% Syntax of Qs.
@@ -372,7 +372,9 @@ enter_dialog(false, _, _, Fields, Fun) -> % No dialog return def values
     return_result(Fun, Values, wings_wm:this());
 enter_dialog(true, no_preview, Dialog, Fields, Fun) -> %% No preview cmd / modal dialog
     case wxDialog:showModal(Dialog) of
-	?wxID_CANCEL -> keep;
+	?wxID_CANCEL -> 
+	    wxDialog:destroy(Dialog),
+	    keep;
 	Result ->
 	    Values = [get_output(Result, Field) ||
 			 Field = #in{data=Data} <- Fields,
@@ -381,8 +383,7 @@ enter_dialog(true, no_preview, Dialog, Fields, Fun) -> %% No preview cmd / modal
 	    return_result(Fun, Values, wings_wm:this())
     end;
 enter_dialog(true, PreviewType, Dialog, Fields, Fun) ->
-    State = #eh{dialog=Dialog, fs=Fields, apply=Fun,
-		owner=wings_wm:this(), type=PreviewType},
+    State = #eh{fs=Fields, apply=Fun, owner=wings_wm:this(), type=PreviewType},
     Op = {push,fun(Ev) -> event_handler(Ev, State) end},
     {TopW,TopH} = wings_wm:top_size(),
     wings_wm:new(dialog_blanket, {0,0,highest}, {TopW,TopH}, Op),
@@ -402,7 +403,9 @@ enter_dialog(true, PreviewType, Dialog, Fields, Fun) ->
 					 {callback,Forward}]),
 		       wxDialog:show(Dialog),
 		       wings_wm:psend(send_after_redraw, dialog_blanket, preview),
-		       receive closed -> ok end
+		       receive 
+			   closed -> wxDialog:destroy(Dialog)
+		       end
 	       end),
     keep.
 
@@ -411,8 +414,7 @@ notify_event_handler(no_preview, _) -> fun() -> ignore end;
 notify_event_handler(_, Msg) -> fun() -> wings_wm:psend(send_once, dialog_blanket, Msg) end.
 
 event_handler(#wx{id=?wxID_CANCEL},
-	      #eh{dialog=Dialog, apply=Fun, owner=Owner, type=Preview}) ->
-    wxDialog:destroy(Dialog),
+	      #eh{apply=Fun, owner=Owner, type=Preview}) ->
     case Preview of
 	preview ->
 	    #st{}=St = Fun(cancel),
@@ -422,12 +424,11 @@ event_handler(#wx{id=?wxID_CANCEL},
     end,
     delete;
 event_handler(#wx{id=Result}=_Ev,
-	      #eh{dialog=Dialog, fs=Fields, apply=Fun, owner=Owner}) ->
+	      #eh{fs=Fields, apply=Fun, owner=Owner}) ->
     %%io:format("Ev closing ~p~n  ~p~n",[_Ev, Fields]),
     Values = [get_output(Result, Field) ||
 		 Field = #in{data=Data} <- Fields,
 		 Data =/= ignore],
-    wxDialog:destroy(Dialog),
     return_result(Fun, Values, Owner),
     delete;
 event_handler(preview, #eh{fs=Fields, apply=Fun, owner=Owner}) ->
@@ -470,6 +471,7 @@ get_output1(_, In=#in{type=filepicker, wx=Ctrl}) ->
     with_key(In,wxFilePickerCtrl:getPath(Ctrl));
 get_output1(_, In=#in{type=color, wx=Ctrl, def=Def}) ->
     Col = wxColourPickerCtrl:getColour(Ctrl),
+    %% Col = wx_color_button:getColour(Ctrl),
     with_key(In, rgb(Col, Def));
 get_output1(_, In=#in{type=slider, wx=Ctrl, data={Convert,_}}) ->
     with_key(In,Convert(wxSlider:getValue(Ctrl)));
@@ -765,6 +767,7 @@ build(Ask, {slider, Flags}, Parent, Sizer, In) ->
 build(Ask, {color, Def, Flags}, Parent, Sizer, In) ->
     Create = fun() ->
 		     Ctrl = wxColourPickerCtrl:new(Parent, ?wxID_ANY, [{col, rgb256(Def)}]),
+		     %% Ctrl = wx_color_button:new(Parent, ?wxID_ANY, [{col, rgb256(Def)}]),
 		     tooltip(Ctrl, Flags),
 		     add_sizer(button, Sizer, Ctrl),
 		     Ctrl
