@@ -470,8 +470,8 @@ get_output1(_, In=#in{type=radiobox, wx=Ctrl, data=Keys}) ->
 get_output1(_, In=#in{type=filepicker, wx=Ctrl}) ->
     with_key(In,wxFilePickerCtrl:getPath(Ctrl));
 get_output1(_, In=#in{type=color, wx=Ctrl, def=Def}) ->
-    Col = wxColourPickerCtrl:getColour(Ctrl),
-    %% Col = wx_color_button:getColour(Ctrl),
+    %% Col = wxColourPickerCtrl:getColour(Ctrl),
+    Col = wx_color_button:getColour(Ctrl),
     with_key(In, rgb(Col, Def));
 get_output1(_, In=#in{type=slider, wx=Ctrl, data={Convert,_}}) ->
     with_key(In,Convert(wxSlider:getValue(Ctrl)));
@@ -766,8 +766,8 @@ build(Ask, {slider, Flags}, Parent, Sizer, In) ->
 
 build(Ask, {color, Def, Flags}, Parent, Sizer, In) ->
     Create = fun() ->
-		     Ctrl = wxColourPickerCtrl:new(Parent, ?wxID_ANY, [{col, rgb256(Def)}]),
-		     %% Ctrl = wx_color_button:new(Parent, ?wxID_ANY, [{col, rgb256(Def)}]),
+		     %%Ctrl = wxColourPickerCtrl:new(Parent, ?wxID_ANY, [{col, rgb256(Def)}]),
+		     Ctrl = wx_color_button:new(Parent, ?wxID_ANY, [{col, rgb256(Def)}]),
 		     tooltip(Ctrl, Flags),
 		     add_sizer(button, Sizer, Ctrl),
 		     Ctrl
