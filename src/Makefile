@@ -129,7 +129,7 @@ MODULES= \
 	wings_wm_menu \
 	wings_wm_toplevel \
 	wpa \
-	wx_color_button
+	ww_color_ctrl
 
 TARGET_FILES= $(MODULES:%=$(EBIN)/%.beam)
 
