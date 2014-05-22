@@ -5,6 +5,8 @@
 %%     so we can override the default color chooser and let the user choose
 %%     which color picker (s)he wants
 %%
+%%     Also handles the color palette better than the orig color_picker
+%%
 %%  Copyright (c) 2014 Dan Gudmundsson
 %%
 %%  See the file "license.terms" for information on usage and redistribution
@@ -19,7 +21,7 @@
 	 handle_call/3]).
 
 %% API
--export([new/3, getColour/1]).
+-export([new/3, getColor/1]).
 %%
 %% Option palette = {InitPalette = fun() -> [Col0,,Col16] end,
 %%                   UpdatePalette = fun([Col0,,Col16]) -> ... end}
@@ -27,8 +29,8 @@
 new(Parent, Id, Opts) ->
     wx_object:start(?MODULE, [Parent, Id, Opts], []).
 
-getColour(Ctrl) ->
-    wx_object:call(Ctrl, get_colour).
+getColor(Ctrl) ->
+    wx_object:call(Ctrl, get_color).
 
 %% Callbacks
 
@@ -73,7 +75,7 @@ handle_event(#wx{event=#wxCommand{type=command_button_clicked}},
 	    {noreply, Updated}
     end.
 
-handle_call(get_colour, _From, #state{brush=Brush} = State) ->
+handle_call(get_color, _From, #state{brush=Brush} = State) ->
     {reply, wxBrush:getColour(Brush), State}.
 
 terminate(_Reason, #state{this=_This, brush=Brush}) ->

@@ -372,7 +372,7 @@ enter_dialog(false, _, _, Fields, Fun) -> % No dialog return def values
     return_result(Fun, Values, wings_wm:this());
 enter_dialog(true, no_preview, Dialog, Fields, Fun) -> %% No preview cmd / modal dialog
     case wxDialog:showModal(Dialog) of
-	?wxID_CANCEL -> 
+	?wxID_CANCEL ->
 	    wxDialog:destroy(Dialog),
 	    keep;
 	Result ->
@@ -470,10 +470,12 @@ get_output1(_, In=#in{type=radiobox, wx=Ctrl, data=Keys}) ->
 get_output1(_, In=#in{type=filepicker, wx=Ctrl}) ->
     with_key(In,wxFilePickerCtrl:getPath(Ctrl));
 get_output1(_, In=#in{type=color, wx=Ctrl, def=Def}) ->
-    Col = ww_color_ctrl:getColour(Ctrl),
+    Col = ww_color_ctrl:getColor(Ctrl),
     with_key(In, rgb(Col, Def));
 get_output1(_, In=#in{type=slider, wx=Ctrl, data={Convert,_}}) ->
     with_key(In,Convert(wxSlider:getValue(Ctrl)));
+get_output1(_, In=#in{type=col_slider, wx=Ctrl}) ->
+    with_key(In,ww_color_slider:getColor(Ctrl));
 get_output1(_, In=#in{type=choice, wx=Ctrl}) ->
     with_key(In,wxChoice:getClientData(Ctrl,wxChoice:getSelection(Ctrl)));
 get_output1(_, In=#in{type=text, def=Def, wx=Ctrl, validator=Validate}) ->
@@ -747,6 +749,17 @@ build(Ask, {slider, {text, Def, Flags}}, Parent, Sizer, In) ->
     Create = fun() -> create_slider(Ask, Def, Flags, Validator, Parent, Sizer) end,
     [#in{key=proplists:get_value(key,Flags), def=Def,
 	 type=text, wx=create(Ask,Create), validator=Validator}|In];
+
+build(Ask, {slider, {color, Def, Flags}}, Parent, Sizer, In) ->
+    Create = fun() ->
+		     Ctrl = ww_color_slider:new(Parent, ?wxID_ANY, Def),
+		     tooltip(Ctrl, Flags),
+		     add_sizer(slider, Sizer, Ctrl),
+		     Ctrl
+	     end,
+    [#in{key=proplists:get_value(key,Flags), def=Def,
+	 type=col_slider, wx=create(Ask,Create)}|In];
+
 
 build(Ask, {slider, Flags}, Parent, Sizer, In) ->
     Def = proplists:get_value(value, Flags),
